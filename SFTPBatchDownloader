@@ -1,0 +1,109 @@
+package ftpjava;
+
+import com.jcraft.jsch.*;
+
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.InputStream;
+import java.io.FileOutputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
+public class SFTPExample {
+
+    public static void main(String[] args) {
+        String csvFilePath = "configdata.txt"; // CSV file path
+
+        Session session = null;
+        ChannelSftp channelSftp = null;
+
+        try (BufferedReader br = new BufferedReader(new FileReader(csvFilePath))) {
+            String line;
+            boolean skipHeader = true; // Flag to skip the header line
+            while ((line = br.readLine()) != null) {
+                if (skipHeader) {
+                    skipHeader = false;
+                    continue; // Skip the header line
+                }
+                
+                String[] data = line.split(",");
+                if (data.length != 6) {
+                    System.err.println("Invalid data format in CSV file: " + line);
+                    continue;
+                }
+
+                String host = data[0];
+                int port = Integer.parseInt(data[1].trim()); // Parse port number after trimming whitespace
+                String user = data[2];
+                String password = data[3];
+                String remoteFilePath = data[4];
+                String localFolderPath = data[5];
+
+                JSch jsch = new JSch();
+                session = jsch.getSession(user, host, port);
+                session.setPassword(password);
+                session.setConfig("StrictHostKeyChecking", "no");
+                
+                try {
+                    session.connect();
+                    System.out.println("Connected successfully to " + host);
+                } catch (JSchException e) {
+                    System.err.println("Failed to connect to " + host + ": " + e.getMessage());
+                    continue; // Skip to next iteration
+                }
+
+                channelSftp = (ChannelSftp) session.openChannel("sftp");
+                channelSftp.connect();
+
+                InputStream inputStream = channelSftp.get(remoteFilePath);
+                String fileName = remoteFilePath.substring(remoteFilePath.lastIndexOf('/') + 1);
+                String localFilePath = localFolderPath + "\\" + fileName;
+
+                // Create folder if it doesn't exist
+                Files.createDirectories(Paths.get(localFolderPath));
+
+                FileOutputStream outputStream = new FileOutputStream(localFilePath);
+
+                byte[] buffer = new byte[1024];
+                long totalBytesRead = 0;
+                int bytesRead;
+                long fileSize = channelSftp.lstat(remoteFilePath).getSize();
+
+                // Print initial progress bar
+                System.out.print("Downloading... [");
+                int progressBarWidth = 50;
+                double progressPercentage = 0;
+
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                    totalBytesRead += bytesRead;
+                    double newProgressPercentage = ((double) totalBytesRead / fileSize) * 100;
+                    if ((int) (newProgressPercentage / (100.0 / progressBarWidth)) > (int) (progressPercentage / (100.0 / progressBarWidth))) {
+                        progressPercentage = newProgressPercentage;
+                        System.out.print("=");
+                    }
+                }
+
+                // Print remaining spaces to complete progress bar
+                for (int i = 0; i < progressBarWidth - (int) (progressPercentage / (100.0 / progressBarWidth)); i++) {
+                    System.out.print("=");
+                }
+
+                outputStream.close();
+                inputStream.close();
+
+                System.out.println("] 100%");
+                System.out.println("File downloaded successfully from " + host + " to " + localFilePath);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (channelSftp != null) {
+                channelSftp.disconnect();
+            }
+            if (session != null) {
+                session.disconnect();
+            }
+        }
+    }
+}
