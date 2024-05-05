@@ -3,11 +3,14 @@ package ftpjava;
 import com.jcraft.jsch.*;
 
 import java.io.BufferedReader;
+import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.InputStream;
-import java.io.FileOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.io.File;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 public class SFTPExample {
 
@@ -58,6 +61,29 @@ public class SFTPExample {
                 InputStream inputStream = channelSftp.get(remoteFilePath);
                 String fileName = remoteFilePath.substring(remoteFilePath.lastIndexOf('/') + 1);
                 String localFilePath = localFolderPath + "\\" + fileName;
+
+                // Check if the file already exists in the local directory
+                File localFile = new File(localFilePath);
+                if (localFile.exists()) {
+                    // File already exists, generate a new name
+                    String ipAddress = host.replace(".", "_");
+                    String fileNameWithoutExtension = fileName.substring(0, fileName.lastIndexOf('.'));
+                    String fileExtension = fileName.substring(fileName.lastIndexOf('.'));
+                    DateTimeFormatter dtf = DateTimeFormatter.ofPattern("'Date'_yyyy_MM_dd_'Time'_hh_mm_ss_a");
+                    LocalDateTime now = LocalDateTime.now();
+                    String timestamp = dtf.format(now);
+                    String newFileName = ipAddress + "_" + fileNameWithoutExtension + "_" + timestamp + fileExtension;
+                    String newLocalFilePath = localFolderPath + "\\" + newFileName;
+
+                    // Rename the existing file
+                    boolean renamed = localFile.renameTo(new File(newLocalFilePath));
+                    if (!renamed) {
+                        System.err.println("Failed to rename existing file: " + localFilePath);
+                        continue; // Skip to next iteration
+                    }
+
+                    System.out.println("File already exists, renamed to: " + newFileName);
+                }
 
                 // Create folder if it doesn't exist
                 Files.createDirectories(Paths.get(localFolderPath));
