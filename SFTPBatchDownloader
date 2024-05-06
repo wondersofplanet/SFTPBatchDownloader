@@ -1,9 +1,6 @@
 package ftpjava;
 
 import com.jcraft.jsch.*;
-
-import com.jcraft.jsch.*;
-
 import java.io.BufferedReader;
 import java.io.FileOutputStream;
 import java.io.FileReader;
@@ -66,6 +63,7 @@ public class SFTPExample {
                 } catch (SftpException e) {
                     if (e.getMessage().contains("No such file")) {
                         System.err.println("File not found on server: " + remoteFilePath + " on server " + host);
+                      
                     } else {
                         System.err.println("Error downloading file from server " + host + ": " + e.getMessage());
                     }
@@ -78,7 +76,10 @@ public class SFTPExample {
                 // Check if the file already exists in the local directory
                 File localFile = new File(localFilePath);
                 if (localFile.exists()) {
-                    // File already exists, generate a new name
+                	Thread.sleep(1000);
+                    System.out.println("File with name: " + fileName + " already exists in " + localFolderPath);
+                    
+                    // File already exists, generate a new name for the newly downloaded file
                     String ipAddress = host.replace(".", "_");
                     String fileNameWithoutExtension = fileName.substring(0, fileName.lastIndexOf('.'));
                     String fileExtension = fileName.substring(fileName.lastIndexOf('.'));
@@ -88,51 +89,26 @@ public class SFTPExample {
                     String newFileName = ipAddress + "_" + fileNameWithoutExtension + "_" + timestamp + fileExtension;
                     String newLocalFilePath = localFolderPath + File.separator + newFileName;
 
-                    // Rename the existing file
-                    boolean renamed = localFile.renameTo(new File(newLocalFilePath));
-                    if (!renamed) {
-                        System.err.println("Failed to rename existing file: " + localFilePath);
+                    // Check if the new file name already exists
+                    File newLocalFile = new File(newLocalFilePath);
+                    if (newLocalFile.exists()) {
+                        System.err.println("A file with the generated name already exists: " + newFileName);
                         continue; // Skip to next iteration
                     }
 
-                    System.out.println("File with name: " + fileName + " already exists in " + localFolderPath + ", renamed downladed file to: " + newFileName);
-                    }
+                    // Save the newly downloaded file with the new name
+                    Files.copy(inputStream, Paths.get(newLocalFilePath));
+                    System.out.println("Downloaded file saved as: " + newFileName);
+                } else {
+                    // Create folder if it doesn't exist
+                    Files.createDirectories(Paths.get(localFolderPath));
 
-                // Create folder if it doesn't exist
-                Files.createDirectories(Paths.get(localFolderPath));
-
-                FileOutputStream outputStream = new FileOutputStream(localFilePath);
-
-                byte[] buffer = new byte[1024];
-                long totalBytesRead = 0;
-                int bytesRead;
-                long fileSize = channelSftp.lstat(remoteFilePath).getSize();
-
-                // Print initial progress bar
-                System.out.print("Downloading... [");
-                int progressBarWidth = 50;
-                double progressPercentage = 0;
-
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    outputStream.write(buffer, 0, bytesRead);
-                    totalBytesRead += bytesRead;
-                    double newProgressPercentage = ((double) totalBytesRead / fileSize) * 100;
-                    if ((int) (newProgressPercentage / (100.0 / progressBarWidth)) > (int) (progressPercentage / (100.0 / progressBarWidth))) {
-                        progressPercentage = newProgressPercentage;
-                        System.out.print("=");
-                    }
+                    // Save the file with its original name
+                    Files.copy(inputStream, Paths.get(localFilePath));
+                    System.out.println("File downloaded successfully from " + host + " to " + localFilePath);
                 }
 
-                // Print remaining spaces to complete progress bar
-                for (int i = 0; i < progressBarWidth - (int) (progressPercentage / (100.0 / progressBarWidth)); i++) {
-                    System.out.print("=");
-                }
-
-                outputStream.close();
                 inputStream.close();
-
-                System.out.println("] 100%");
-                System.out.println("File downloaded successfully from " + host + " to " + localFilePath);
             }
         } catch (Exception e) {
             e.printStackTrace();
